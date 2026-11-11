@@ -95,7 +95,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(4), 0, dp(4))
         }
 
-        startButton = pill(0xFF3DDC84.toInt(), 0xFF073042.toInt(), "BAŞLAT") { onStart() }
+        startButton = pill(0xFF3DDC84.toInt(), 0xFF073042.toInt(), "BAŞLAT") { onStartPressed() }
         val photoButton = pill(0xFF2A3358.toInt(), Color.WHITE, "Foto seç") { pick("image/*", REQ_PHOTO) }
         val soundButton = pill(0xFF2A3358.toInt(), Color.WHITE, "Ses seç") { pick("audio/*", REQ_SOUND) }
         resetButton = pill(0x00000000, 0xFFB0B8D0.toInt(), "Varsayılana dön") {
@@ -205,7 +205,7 @@ class MainActivity : Activity() {
         preview = null
     }
 
-    private fun onStart() {
+    private fun onStartPressed() {
         if (!Settings.canDrawOverlays(this)) {
             startActivity(
                 Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
