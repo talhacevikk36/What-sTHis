@@ -3,9 +3,9 @@
 Ekranın üstünde (overlay) DVD ekran koruyucusu gibi kenarlara çarpıp gezen bir görsel + ses.
 Altta **ÇIK** butonu: ilk 3 basışta yeni bir DVD daha çıkar (ses çalar), 4. basışta uygulama kapanır.
 
-## Kendi foto ve sesini koy
-- Foto: `app/src/main/res/drawable-nodpi/dvd_photo.png` dosyasını değiştir (PNG, şeffaf olabilir)
-- Ses: `app/src/main/res/raw/dvd_sound.wav` dosyasını değiştir (aynı isimle; mp3 ise `dvd_sound.mp3` yap)
+## Foto ve sesi değiştir
+- Uygulamanın içinden: ana ekranda **Foto seç** / **Ses seç** (kalıcı kaydedilir), **Varsayılana dön** ile sıfırla
+- Varsayılanları değiştirmek istersen: `app/src/main/res/drawable-nodpi/dvd_photo.png` ve `app/src/main/res/raw/dvd_sound.wav`
 
 ## Derleme
 - GitHub: repoya yükle, **Actions → Build signed APK** çalışır, APK "Artifacts" içinde.

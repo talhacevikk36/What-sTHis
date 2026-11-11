@@ -156,7 +156,7 @@ class OverlayService : Service() {
 
     private fun playSound() {
         try {
-            val mp = MediaPlayer.create(this, R.raw.dvd_sound) ?: return
+            val mp = createPlayer() ?: return
             players.add(mp)
             mp.setOnCompletionListener {
                 it.release()
@@ -168,12 +168,33 @@ class OverlayService : Service() {
         }
     }
 
+    /** Kullanıcının sesi varsa onu, yoksa (veya bozuksa) varsayılanı döndürür. */
+    private fun createPlayer(): MediaPlayer? {
+        if (CustomMedia.hasSound(this)) {
+            try {
+                return MediaPlayer().apply {
+                    setDataSource(CustomMedia.soundFile(this@OverlayService).path)
+                    prepare()
+                }
+            } catch (_: Exception) {
+                // bozuksa varsayılana düş
+            }
+        }
+        return MediaPlayer.create(this, R.raw.dvd_sound)
+    }
+
     private fun loadSprite(targetPx: Int): Bitmap {
+        val custom = CustomMedia.photoFile(this)
+        val useFile = custom.exists()
+        fun decode(o: BitmapFactory.Options): Bitmap? =
+            if (useFile) BitmapFactory.decodeFile(custom.path, o)
+            else BitmapFactory.decodeResource(resources, R.drawable.dvd_photo, o)
+
         val bounds = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
             inScaled = false
         }
-        BitmapFactory.decodeResource(resources, R.drawable.dvd_photo, bounds)
+        decode(bounds)
         var sample = 1
         while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= targetPx) sample *= 2
 
@@ -181,7 +202,8 @@ class OverlayService : Service() {
             inSampleSize = sample
             inScaled = false
         }
-        val src = BitmapFactory.decodeResource(resources, R.drawable.dvd_photo, opts)
+        val src = decode(opts)
+            ?: BitmapFactory.decodeResource(resources, R.drawable.dvd_photo, opts.apply { inSampleSize = 1 })
         val scale = targetPx.toFloat() / max(src.width, src.height)
         return Bitmap.createScaledBitmap(
             src,
