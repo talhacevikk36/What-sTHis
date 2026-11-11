@@ -1,0 +1,61 @@
+name: Build signed APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+
+      - name: Build release (unsigned)
+        run: gradle :app:assembleRelease --no-daemon
+
+      - name: Prepare keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > release.jks
+            echo "KS_PASS=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+            echo "KS_ALIAS=${{ secrets.KEY_ALIAS || 'whatisthis' }}" >> $GITHUB_ENV
+          else
+            # Secret yoksa tek seferlik anahtar üret (her derlemede farklı imza olur)
+            keytool -genkeypair -v -keystore release.jks -alias whatisthis \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass whatisthis123 -keypass whatisthis123 \
+              -dname "CN=WHAT IS THIS, O=tdev, C=TR"
+            echo "KS_PASS=whatisthis123" >> $GITHUB_ENV
+            echo "KS_ALIAS=whatisthis" >> $GITHUB_ENV
+          fi
+
+      - name: zipalign + apksigner
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          mkdir -p dist
+          $BT/zipalign -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk dist/aligned.apk
+          $BT/apksigner sign --ks release.jks --ks-key-alias "$KS_ALIAS" \
+            --ks-pass pass:"$KS_PASS" --key-pass pass:"$KS_PASS" \
+            --out dist/com.tdev.whatisthis.apk dist/aligned.apk
+          $BT/apksigner verify --verbose dist/com.tdev.whatisthis.apk
+          rm -f dist/aligned.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: com.tdev.whatisthis-apk
+          path: dist/com.tdev.whatisthis.apk
