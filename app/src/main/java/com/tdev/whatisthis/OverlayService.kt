@@ -10,7 +10,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaPlayer
 import android.os.Build
@@ -28,15 +27,6 @@ import kotlin.math.roundToInt
 class OverlayService : Service() {
 
     companion object {
-        /** "Çık" butonuna ilk kaç basışta yeni DVD çıksın. Bundan sonraki basışta uygulama kapanır. */
-        const val MAX_SPAWNS = 3
-
-        /** DVD görselinin ekrandaki en büyük kenarı (dp). */
-        const val SPRITE_DP = 120f
-
-        /** Hız (dp/sn). */
-        const val SPEED_DP_PER_SEC = 220f
-
         private const val CHANNEL_ID = "overlay"
         private const val NOTIF_ID = 1
 
@@ -90,10 +80,10 @@ class OverlayService : Service() {
 
     private fun setupViews() {
         val density = resources.displayMetrics.density
-        val sprite = loadSprite((SPRITE_DP * density).roundToInt())
+        val sprite = loadSprite((Prefs.sizeDp(this) * density).roundToInt())
 
         // 1) Tüm ekranı kaplayan, dokunuşu geçiren zıplama katmanı
-        val bv = BounceView(this, sprite, SPEED_DP_PER_SEC * density)
+        val bv = BounceView(this, sprite, Prefs.speedDp(this) * density)
         val bounceParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -114,19 +104,20 @@ class OverlayService : Service() {
 
         // 2) Altta ÇIK butonu (dokunulabilir tek parça)
         val btn = Button(this).apply {
-            text = "ÇIK"
+            text = "Çık"
             isAllCaps = false
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            textSize = 18f
+            setTextColor(Color.BLACK)
+            textSize = 16f
             background = GradientDrawable().apply {
-                setColor(0xFFE53935.toInt())
-                cornerRadius = 40f * density
+                setColor(0xFFBDBDBD.toInt())
+                setStroke((1 * density).toInt().coerceAtLeast(1), 0xFF757575.toInt())
+                cornerRadius = 4f * density
             }
-            val h = (28 * density).toInt()
-            val v = (10 * density).toInt()
+            val h = (24 * density).toInt()
+            val v = (8 * density).toInt()
             setPadding(h, v, h, v)
-            minWidth = (140 * density).toInt()
+            minWidth = (120 * density).toInt()
+            alpha = Prefs.buttonAlpha(this@OverlayService) / 100f
             setOnClickListener { onExitPressed() }
         }
         val buttonParams = WindowManager.LayoutParams(
@@ -143,10 +134,10 @@ class OverlayService : Service() {
         exitButton = btn
     }
 
-    /** Basış 1..MAX_SPAWNS: yeni DVD. Sonraki basış: uygulamadan çık. */
+    /** closeAt'e gelene kadar her basış yeni DVD çıkarır; closeAt'inci basışta uygulama kapanır. */
     private fun onExitPressed() {
         presses++
-        if (presses <= MAX_SPAWNS) spawn() else exitApp()
+        if (presses < Prefs.closeAt(this)) spawn() else exitApp()
     }
 
     private fun spawn() {

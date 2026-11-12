@@ -13,6 +13,6 @@ Altta **ÇIK** butonu: ilk 3 basışta yeni bir DVD daha çıkar (ses çalar), 4
 - Yerel: `ANDROID_HOME` ayarla, `./build-local.sh`
 
 ## Ayarlar
-`OverlayService.kt` içinde: `MAX_SPAWNS`, `SPRITE_DP`, `SPEED_DP_PER_SEC`.
+Ayarlar uygulamanın ana ekranında: kaçıncı basışta kapanacağı, ÇIK butonu opaklığı, DVD boyutu ve hız.
 
 Kapak görseli: `store/cover.png`

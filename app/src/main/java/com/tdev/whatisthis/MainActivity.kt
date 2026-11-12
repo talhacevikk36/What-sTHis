@@ -6,18 +6,18 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 
@@ -28,94 +28,165 @@ class MainActivity : Activity() {
         const val REQ_SOUND = 102
     }
 
-    private lateinit var cover: ImageView
+    private class Slider(val bar: SeekBar, val label: TextView)
+
+    private lateinit var thumb: ImageView
+    private lateinit var soundInfo: TextView
     private lateinit var status: TextView
     private lateinit var startButton: Button
-    private lateinit var soundInfo: TextView
-    private lateinit var resetButton: Button
+    private lateinit var sCloseAt: Slider
+    private lateinit var sAlpha: Slider
+    private lateinit var sSize: Slider
+    private lateinit var sSpeed: Slider
     private var preview: MediaPlayer? = null
 
     private val d get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * d).toInt()
 
-    private fun pill(color: Int, textColor: Int, label: String, onClick: () -> Unit) =
-        Button(this).apply {
-            text = label
-            isAllCaps = false
-            typeface = Typeface.DEFAULT_BOLD
-            textSize = 16f
-            setTextColor(textColor)
-            background = GradientDrawable().apply {
-                setColor(color)
-                cornerRadius = 40f * d
-            }
-            setPadding(dp(28), dp(10), dp(28), dp(10))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(10) }
+    private fun text(s: String, size: Float, color: Int) = TextView(this).apply {
+        text = s
+        textSize = size
+        setTextColor(color)
+    }
+
+    private fun divider() = View(this).apply {
+        setBackgroundColor(0xFFBDBDBD.toInt())
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
+    }
+
+    /** Başlık + değiştir butonu olan satır. */
+    private fun row(left: View, title: String, sub: TextView, onClick: () -> Unit): LinearLayout {
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginStart = dp(12) }
+            addView(text(title, 16f, 0xFF212121.toInt()))
+            addView(sub)
+        }
+        val btn = Button(this).apply {
+            text = "Değiştir"
             setOnClickListener { onClick() }
         }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(10), dp(8), dp(10))
+            addView(left)
+            addView(col)
+            addView(btn)
+        }
+    }
+
+    /** Başlığı ve değeri üstte, çubuğu altta olan ayar. */
+    private fun slider(
+        title: String, min: Int, max: Int, step: Int, key: String,
+        unit: String, current: () -> Int
+    ): Pair<Slider, LinearLayout> {
+        val label = text("", 16f, 0xFF212121.toInt())
+        val bar = SeekBar(this).apply { this.max = (max - min) / step }
+        fun show(v: Int) { label.text = "$title: $v$unit" }
+
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                val v = min + p * step
+                show(v)
+                if (fromUser) Prefs.put(this@MainActivity, key, v)
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) {}
+        })
+
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(8))
+            addView(label)
+            addView(bar)
+        }
+        val s = Slider(bar, label)
+        // Değeri dışarıdan ayarlamak için (refresh)
+        bar.tag = Triple(min, step, current)
+        return Pair(s, box)
+    }
+
+    private fun setSlider(s: Slider, v: Int) {
+        @Suppress("UNCHECKED_CAST")
+        val t = s.bar.tag as Triple<Int, Int, () -> Int>
+        s.bar.progress = ((v - t.first) / t.second).coerceIn(0, s.bar.max)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(24), dp(32), dp(24), dp(24))
-        }
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
-        cover = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            layoutParams = LinearLayout.LayoutParams(dp(180), dp(180))
-        }
-
-        val title = TextView(this).apply {
+        // Eski usul koyu gri başlık çubuğu
+        root.addView(TextView(this).apply {
             text = "WHAT IS THIS"
+            textSize = 20f
             setTextColor(Color.WHITE)
-            textSize = 30f
-            typeface = Typeface.DEFAULT_BOLD
-            letterSpacing = 0.08f
-            gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, dp(6))
-        }
+            setBackgroundColor(0xFF212121.toInt())
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), 0, dp(16), 0)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(56)
+            )
+        })
 
-        status = TextView(this).apply {
-            setTextColor(0xFFB0B8D0.toInt())
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(12))
-        }
-
-        soundInfo = TextView(this).apply {
-            setTextColor(0xFF8A93B2.toInt())
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setPadding(0, dp(4), 0, dp(4))
-        }
-
-        startButton = pill(0xFF3DDC84.toInt(), 0xFF073042.toInt(), "BAŞLAT") { onStartPressed() }
-        val photoButton = pill(0xFF2A3358.toInt(), Color.WHITE, "Foto seç") { pick("image/*", REQ_PHOTO) }
-        val soundButton = pill(0xFF2A3358.toInt(), Color.WHITE, "Ses seç") { pick("audio/*", REQ_SOUND) }
-        resetButton = pill(0x00000000, 0xFFB0B8D0.toInt(), "Varsayılana dön") {
-            CustomMedia.reset(this)
-            refresh()
-            Toast.makeText(this, "Varsayılan foto ve ses geri geldi", Toast.LENGTH_SHORT).show()
-        }
-
-        root.addView(cover)
-        root.addView(title)
+        status = text("", 14f, 0xFF616161.toInt()).apply { setPadding(dp(16), dp(12), dp(16), dp(12)) }
         root.addView(status)
+        root.addView(divider())
+
+        thumb = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
+        }
+        root.addView(row(thumb, "Fotoğraf", text("Ekranda gezen görsel", 13f, 0xFF757575.toInt())) {
+            pick("image/*", REQ_PHOTO)
+        })
+        root.addView(divider())
+
+        soundInfo = text("", 13f, 0xFF757575.toInt())
+        val note = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_lock_silent_mode_off)
+            setColorFilter(0xFF616161.toInt())
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(32))
+        }
+        root.addView(row(note, "Ses", soundInfo) { pick("audio/*", REQ_SOUND) })
+        root.addView(divider())
+
+        val a = slider("Kaçıncı basışta kapansın", 1, 10, 1, "closeAt", "") { Prefs.closeAt(this) }
+        val b = slider("ÇIK butonu opaklığı", 20, 100, 5, "buttonAlpha", "%") { Prefs.buttonAlpha(this) }
+        val c = slider("DVD boyutu", 60, 240, 10, "sizeDp", " dp") { Prefs.sizeDp(this) }
+        val e = slider("Hız", 80, 600, 20, "speedDp", " dp/sn") { Prefs.speedDp(this) }
+        sCloseAt = a.first; sAlpha = b.first; sSize = c.first; sSpeed = e.first
+        for (box in listOf(a.second, b.second, c.second, e.second)) {
+            root.addView(box)
+            root.addView(divider())
+        }
+
+        root.addView(Button(this).apply {
+            text = "Her şeyi sıfırla"
+            setOnClickListener {
+                CustomMedia.reset(this@MainActivity)
+                Prefs.reset(this@MainActivity)
+                refresh()
+                Toast.makeText(this@MainActivity, "Sıfırlandı", Toast.LENGTH_SHORT).show()
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(16), dp(16), dp(16), 0) }
+        })
+
+        startButton = Button(this).apply {
+            setOnClickListener { onStartPressed() }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(dp(16), dp(8), dp(16), dp(24)) }
+        }
         root.addView(startButton)
-        root.addView(photoButton)
-        root.addView(soundButton)
-        root.addView(soundInfo)
-        root.addView(resetButton)
 
         setContentView(ScrollView(this).apply {
-            setBackgroundColor(0xFF0B1020.toInt())
-            isFillViewport = true
+            setBackgroundColor(0xFFEEEEEE.toInt())
             addView(root)
         })
 
@@ -138,20 +209,19 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         val ok = Settings.canDrawOverlays(this)
-        status.text = if (ok) "İzin tamam. Başlat'a bas." else "Ekranın üstünde gösterme izni lazım."
-        startButton.text = if (ok) "BAŞLAT" else "İZNİ VER"
+        status.text = if (ok) "Üstte gösterme izni verildi." else "Ekranın üstünde gösterme izni gerekiyor."
+        startButton.text = if (ok) "Başlat" else "İzni ver"
 
-        if (CustomMedia.hasPhoto(this)) {
-            val bmp = BitmapFactory.decodeFile(CustomMedia.photoFile(this).path)
-            if (bmp != null) cover.setImageBitmap(bmp) else cover.setImageResource(R.drawable.dvd_photo)
-        } else {
-            cover.setImageResource(R.drawable.dvd_photo)
-        }
+        val bmp = if (CustomMedia.hasPhoto(this))
+            BitmapFactory.decodeFile(CustomMedia.photoFile(this).path) else null
+        if (bmp != null) thumb.setImageBitmap(bmp) else thumb.setImageResource(R.drawable.dvd_photo)
 
-        soundInfo.text = if (CustomMedia.hasSound(this)) "Ses: senin seçtiğin" else "Ses: varsayılan"
-        val custom = CustomMedia.hasPhoto(this) || CustomMedia.hasSound(this)
-        resetButton.alpha = if (custom) 1f else 0.35f
-        resetButton.isEnabled = custom
+        soundInfo.text = if (CustomMedia.hasSound(this)) "Seçtiğin ses" else "Varsayılan ses"
+
+        setSlider(sCloseAt, Prefs.closeAt(this))
+        setSlider(sAlpha, Prefs.buttonAlpha(this))
+        setSlider(sSize, Prefs.sizeDp(this))
+        setSlider(sSpeed, Prefs.speedDp(this))
     }
 
     private fun pick(mime: String, code: Int) {
@@ -175,7 +245,7 @@ class MainActivity : Activity() {
         when (requestCode) {
             REQ_PHOTO -> {
                 val ok = CustomMedia.savePhoto(this, uri)
-                Toast.makeText(this, if (ok) "Foto ayarlandı" else "Bu foto okunamadı", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, if (ok) "Fotoğraf ayarlandı" else "Bu fotoğraf okunamadı", Toast.LENGTH_SHORT).show()
             }
             REQ_SOUND -> {
                 val ok = CustomMedia.saveSound(this, uri)
